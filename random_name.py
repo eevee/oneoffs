@@ -20,10 +20,14 @@ def random_name(seed=None):
 
     if not seed:
         seed = time()
-
     random.seed(seed)
 
-    return "%s %s" % (_rand_first_name(), _rand_surname())
+    name = "%s %s" % (_rand_first_name(), _rand_surname())
+
+    # Be polite and reseed if this should be used as a module
+    random.seed()
+
+    return name
 
 def _rand_first_name():
     return random.choice( [
