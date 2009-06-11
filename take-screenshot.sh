@@ -1,10 +1,15 @@
 #!/usr/bin/zsh
 # Minimally-interactive screenshot tool.  All parameters are passed to scrot.
 
+# When launching this script from a compiz command, compiz has a lock on the
+# keyboard, and scrot complains it cannot grab the keyboard if there's not a
+# delay.  Lame but whatever
+sleep 0.25
+
 # Save to a tempfile so we don't have to worry about waiting for the zenity
 # window to close
 local tempfile; tempfile=$(mktemp).png
-scrot ${argv[*]} --multidisp $tempfile
+scrot $* $tempfile
 
 # Ask where to save locally
 local screenshot_root; screenshot_root=/stuff/pictures/screenshots/  # NEED trailing slash
@@ -18,6 +23,5 @@ screenshot_filename=${screenshot_path/$screenshot_root/}
 mv $tempfile $screenshot_path
 scp $screenshot_path veekun.com:stuff.veekun.com/screenshots/$screenshot_filename
 
-# Stick URL on the clipboard
-print -n http://stuff.veekun.com/screenshots/$screenshot_filename | xsel -b
-zenity --info --title='Success' --text="$screenshot_filename saved, uploaded, and copied to clipboard."
+# Report success
+zenity --info --title='Success' --text=http://stuff.veekun.com/screenshots/$screenshot_filename
