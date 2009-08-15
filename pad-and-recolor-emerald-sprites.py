@@ -11,10 +11,17 @@ figure out the colors for a shiny animated sprite.
 
 Requires PIL for obvious reasons.  Also requires ImageMagick, because PIL
 sucks.
+
+Relies on the file arrangement I'm already using:
+- Current directory contains regular 64x64 sprites.
+- A directory called `shiny` contains shiny versions of the above.
+- A directory called `orig-animated` contains cropped animations.
+- `animated/` and `shiny/animated/` exist.  These will be populated.
 """
 
 from __future__ import division
 import glob
+import os
 import subprocess
 
 from PIL import Image
@@ -34,14 +41,14 @@ def first_pixel(image):
                 return x, y
 
 
-for n in [133]:
+for n in range(1, 387):
     # Keep us posted on status here
     print n
 
     static_normal = Image.open('%d.png' % n)
-    static_shiny = Image.open('%d-shiny.png' % n)
+    static_shiny = Image.open('shiny/%d.png' % n)
 
-    anim_original = Image.open('%d.gif' % n)
+    anim_original = Image.open('orig-animated/%d.gif' % n)
 
     static_x, static_y = first_pixel(static_normal)
     anim_x, anim_y = first_pixel(anim_original)
@@ -49,11 +56,11 @@ for n in [133]:
     left_margin = static_x - anim_x
     top_margin = static_y - anim_y
 
-    subprocess.call(['convert', '%d.gif' % n, '-background', 'none', '-extent', "64x64-%d-%d" % (left_margin, top_margin), '%d-fixed.gif' % n])
+    subprocess.call(['convert', 'orig-animated/%d.gif' % n, '-background', 'none', '-extent', "64x64-%d-%d" % (left_margin, top_margin), 'animated/%d.gif' % n])
 
     # Time for stage 2: creating the shiny version.
     anim_original = None
-    anim_normal = Image.open('%d-fixed.gif' % n)
+    anim_normal = Image.open('animated/%d.gif' % n)
 
     shiny_colors = {}
     normal_data = static_normal.load()
@@ -83,10 +90,14 @@ for n in [133]:
     # -fx operates on every image at once, which isn't going to work so well for
     # us, alas.  We have to operate on every frame individually, then stitch it
     # together with the same options as the original.  Sigh.
-    subprocess.call(['convert', '%d-fixed.gif' % n, '+adjoin', '%d-parts%03d.gif' % n])
-    parts = glob.glob('%d-parts*.gif' % n)
+    subprocess.call(['convert', 'animated/%d.gif' % n, '+adjoin', 'animated/%d-parts%%03d.gif' % n])
+    parts = glob.glob('animated/%d-parts*.gif' % n)
     parts.sort()  # keep frames in the right order...
     for part in parts:
         subprocess.call(['convert', part, '-fx', fx, part])
 
-    subprocess.call(['convert'] + parts + ['-loop', '0', '%d-shiny.gif' % n])
+    subprocess.call(['convert'] + parts + ['-loop', '0', 'shiny/animated/%d.gif' % n])
+
+    # Clean up after ourselves
+    for part in parts:
+        os.remove(part)
