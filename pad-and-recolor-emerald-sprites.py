@@ -75,29 +75,24 @@ for n in range(1, 387):
             shiny_colors[normal_px] = shiny_px
 
     # Now we have a dictionary of old colors => new colors.  Okay, now what?
-    # Unfortunately, it seems the only way to do a palette swap all at once with
-    # either PIL or ImageMagick is to use a lot of ternary expressions with -fx
-    # and the ?: operator.
-    # So let's just do that.
-    fx_chunk = "(abs(r - %f) < 0.0001 && abs(g - %f) < 0.0001 && abs(b - %f) < 0.0001) ? rgb(%d, %d, %d)"
-    fx_chunks = ["a == 0 ? p"]
-    for normal_px, shiny_px in shiny_colors.items():
-        vals = list([_ / 255 for _ in normal_px[0:3]]) + list(shiny_px[0:3])
-        fx_chunks.append(fx_chunk % tuple(vals))
-    fx_chunks.append("rgb(255, 0, 255)")  # default fallback: magenta
-    fx = ' : '.join(fx_chunks)
+    # Neither ImageMagick nor PIL are particularly suited to handle this, it
+    # seems.  So we'll do it the fun way: replace the color table manually.
+    # GIF spec: http://www.w3.org/Graphics/GIF/spec-gif89a.txt
+    # The global color table is 13 bytes into the file, three bytes per color.
+    ani_in = open('animated/%d.gif' % n, 'rb')
+    ani_out = open('shiny/animated/%d.gif' % n, 'wb')
+    ani_header = ani_in.read(13)
+    ani_out.write(ani_header)
+    transparentidx = ord(ani_header[12])
 
-    # -fx operates on every image at once, which isn't going to work so well for
-    # us, alas.  We have to operate on every frame individually, then stitch it
-    # together with the same options as the original.  Sigh.
-    subprocess.call(['convert', 'animated/%d.gif' % n, '+adjoin', 'animated/%d-parts%%03d.gif' % n])
-    parts = glob.glob('animated/%d-parts*.gif' % n)
-    parts.sort()  # keep frames in the right order...
-    for part in parts:
-        subprocess.call(['convert', part, '-fx', fx, part])
+    for coloridx in range(len(shiny_colors)):
+        if coloridx == transparentidx:
+            continue
 
-    subprocess.call(['convert'] + parts + ['-loop', '0', 'shiny/animated/%d.gif' % n])
+        r, g, b = [ord(_) for _ in ani_in.read(3)]
+        newr, newg, newb, _ = shiny_colors[(r, g, b, 255)]
+        ani_out.write(chr(newr))
+        ani_out.write(chr(newg))
+        ani_out.write(chr(newb))
 
-    # Clean up after ourselves
-    for part in parts:
-        os.remove(part)
+    ani_out.write(ani_in.read())
