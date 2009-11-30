@@ -9,8 +9,7 @@ This script fixes both of those problems.  It requires uncropped static sprites
 to figure out how to pad the animated sprite, and a shiny static sprite to
 figure out the colors for a shiny animated sprite.
 
-Requires PIL for obvious reasons.  Also requires ImageMagick, because PIL
-sucks.
+Requires PIL for obvious reasons.  Also requires gifsicle.
 
 Relies on the file arrangement I'm already using:
 - Current directory contains regular 64x64 sprites.
@@ -41,7 +40,7 @@ def first_pixel(image):
                 return x, y
 
 
-for n in range(1, 387):
+for n in range(328, 387):
     # Keep us posted on status here
     print n
 
@@ -56,7 +55,19 @@ for n in range(1, 387):
     left_margin = static_x - anim_x
     top_margin = static_y - anim_y
 
-    subprocess.call(['convert', 'orig-animated/%d.gif' % n, '-background', 'none', '-extent', "64x64-%d-%d" % (left_margin, top_margin), 'animated/%d.gif' % n])
+    subprocess.call([
+        'gifsicle',
+        # Expand canvas to 96x96
+        '--screen', '96x96',
+        # Reposition the entire image appropriately
+        '--position', "{0},{1}".format(16 + left_margin,
+                                       16 + top_margin),
+        # Crush the hell out of it
+        '--optimize',
+
+        "orig-animated/{0}.gif".format(n),
+        '--output', "animated/{0}.gif".format(n),
+    ])
 
     # Time for stage 2: creating the shiny version.
     anim_original = None
@@ -65,34 +76,37 @@ for n in range(1, 387):
     shiny_colors = {}
     normal_data = static_normal.load()
     shiny_data = static_shiny.load()
-    for x in range(64):
-        for y in range(64):
-            normal_px = normal_data[x, y]
-            shiny_px = shiny_data[x, y]
-            if normal_px in shiny_colors and shiny_colors[normal_px] != shiny_px:
-                print shiny_colors, normal_px, shiny_px
-                raise ValueError
-            shiny_colors[normal_px] = shiny_px
+    try:
+        for x in range(64):
+            for y in range(64):
+                normal_px = normal_data[x, y]
+                shiny_px = shiny_data[x, y]
+                if normal_px in shiny_colors and shiny_colors[normal_px] != shiny_px:
+                    print """  BAILING: {normal} maps to {shiny} at ({x}, {y}) but was already {previous_shiny}""" \
+                        .format(x=x, y=y,
+                                normal=normal_px,
+                                shiny=shiny_px,
+                                previous_shiny=shiny_colors[normal_px])
+                    raise ValueError
+                shiny_colors[normal_px] = shiny_px
+    except ValueError:
+        continue
 
-    # Now we have a dictionary of old colors => new colors.  Okay, now what?
-    # Neither ImageMagick nor PIL are particularly suited to handle this, it
-    # seems.  So we'll do it the fun way: replace the color table manually.
-    # GIF spec: http://www.w3.org/Graphics/GIF/spec-gif89a.txt
-    # The global color table is 13 bytes into the file, three bytes per color.
-    ani_in = open('animated/%d.gif' % n, 'rb')
-    ani_out = open('shiny/animated/%d.gif' % n, 'wb')
-    ani_header = ani_in.read(13)
-    ani_out.write(ani_header)
-    transparentidx = ord(ani_header[12])
-
-    for coloridx in range(len(shiny_colors)):
-        if coloridx == transparentidx:
+    # Now we have a dictionary of old colors => new colors.  Lucky for me,
+    # gifsicle can also swap colors!
+    color_swap_args = []
+    for normal, shiny in shiny_colors.items():
+        if normal[3] == 0:
             continue
+        color_swap_args.append('--change-color')
+        color_swap_args.append("#{0:02x}{1:02x}{2:02x}".format(*normal))
+        color_swap_args.append("#{0:02x}{1:02x}{2:02x}".format(*shiny))
 
-        r, g, b = [ord(_) for _ in ani_in.read(3)]
-        newr, newg, newb, _ = shiny_colors[(r, g, b, 255)]
-        ani_out.write(chr(newr))
-        ani_out.write(chr(newg))
-        ani_out.write(chr(newb))
-
-    ani_out.write(ani_in.read())
+    subprocess.call(
+        [ 'gifsicle' ]
+        + color_swap_args +
+        [
+            "animated/{0}.gif".format(n),
+            '--output', "shiny/animated/{0}.gif".format(n),
+        ]
+    )
