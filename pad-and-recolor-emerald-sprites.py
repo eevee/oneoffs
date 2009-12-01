@@ -40,7 +40,7 @@ def first_pixel(image):
                 return x, y
 
 
-for n in range(328, 387):
+for n in range(387):
     # Keep us posted on status here
     print n
 
@@ -74,14 +74,16 @@ for n in range(328, 387):
     anim_normal = Image.open('animated/%d.gif' % n)
 
     shiny_colors = {}
-    normal_data = static_normal.load()
-    shiny_data = static_shiny.load()
+    normal_data = static_normal.convert('RGBA').load()
+    shiny_data = static_shiny.convert('RGBA').load()
     try:
         for x in range(64):
             for y in range(64):
                 normal_px = normal_data[x, y]
                 shiny_px = shiny_data[x, y]
                 if normal_px in shiny_colors and shiny_colors[normal_px] != shiny_px:
+                    shiny_colors[normal_px] = (0, 255, 0, 255)
+                    continue
                     print """  BAILING: {normal} maps to {shiny} at ({x}, {y}) but was already {previous_shiny}""" \
                         .format(x=x, y=y,
                                 normal=normal_px,
