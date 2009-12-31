@@ -31,7 +31,7 @@ for ch in buf:
         # New child node.  Add it to our context
         context.append(ch)
         nodes.append([])
-    
+
     elif ch == '}':
         # Closing a node.  Pop our stacks and combine our current node with
         # its parent
